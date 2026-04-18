@@ -1,0 +1,18 @@
+{
+  "name": "ai-hotel-discovery-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:css": "tailwindcss -i ./public/tailwind.css -o ./public/styles.css --minify",
+    "start": "npm run build:css && node server/server.js",
+    "dev": "npm run build:css && node --watch server/server.js"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}
