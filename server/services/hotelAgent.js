@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { createStructuredResponse, isOpenAIEnabled } from "./openai.js";
+import { fetchHotelsForCity, isTripAdvisorEnabled } from "./tripadvisor.js";
 
-const HOTELS = JSON.parse(
+const STATIC_HOTELS = JSON.parse(
   readFileSync(new URL("../data/hotels.json", import.meta.url), "utf8")
 );
 
@@ -345,12 +346,20 @@ function buildSearchContext(intent, preferences) {
   };
 }
 
-function getCityHotels(searchContext) {
-  if (!searchContext.location) {
-    return HOTELS;
+async function getCityHotels(searchContext) {
+  if (isTripAdvisorEnabled() && searchContext.location) {
+    try {
+      const liveHotels = await fetchHotelsForCity(searchContext.location);
+      if (liveHotels.length > 0) return liveHotels;
+    } catch (err) {
+      console.warn(`[TripAdvisor] fetch failed for "${searchContext.location}": ${err.message} — falling back to static catalog`);
+    }
   }
 
-  return HOTELS.filter((hotel) => normalizeText(hotel.city) === normalizeText(searchContext.location));
+  /* Fallback: static catalog */
+  const all = STATIC_HOTELS;
+  if (!searchContext.location) return all;
+  return all.filter((hotel) => normalizeText(hotel.city) === normalizeText(searchContext.location));
 }
 
 function getLocationStatus(searchContext, cityHotels) {
@@ -710,7 +719,7 @@ export async function searchHotels(query = "", rawPreferences = DEFAULT_PREFEREN
   const preferences = normalizePreferences(rawPreferences);
   const intent = await extractIntent(query, preferences);
   const searchContext = buildSearchContext(intent, preferences);
-  const cityHotels = getCityHotels(searchContext).map((hotel) => ({
+  const cityHotels = (await getCityHotels(searchContext)).map((hotel) => ({
     ...hotel,
     id: normalizeKey(`${hotel.city}-${hotel.name}`)
   }));
@@ -794,7 +803,7 @@ export async function searchHotels(query = "", rawPreferences = DEFAULT_PREFEREN
     hotels: finalHotels,
     refinementSuggestions: buildRefinementSuggestions(searchContext),
     meta: {
-      totalHotels: HOTELS.length,
+      totalHotels: cityHotels.length,
       cityFilteredHotels: cityHotels.length,
       scoringWeights: SCORE_WEIGHTS,
       layerCounts,
